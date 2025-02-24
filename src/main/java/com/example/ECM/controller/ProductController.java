@@ -74,12 +74,20 @@ public class ProductController {
     @PostMapping
     public ResponseEntity<ProductDTO> createProduct(@RequestBody ProductDTO productDTO) {
         try {
+            // Kiểm tra nếu stockQuantity không có giá trị
+            if (productDTO.getStockQuantity() == null || productDTO.getStockQuantity() < 0) {
+                // Trả về lỗi nếu stockQuantity không hợp lệ
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
+            }
+
+            // Tiến hành tạo sản phẩm nếu stockQuantity hợp lệ
             return ResponseEntity.status(HttpStatus.CREATED).body(productService.createProduct(productDTO));
         } catch (Exception e) {
             logger.error("Lỗi khi thêm sản phẩm: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
         }
     }
+
 
     // 🔹 Cập nhật sản phẩm (chỉ admin)
     @PreAuthorize("hasRole('ADMIN')")
