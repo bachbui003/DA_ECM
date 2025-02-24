@@ -47,6 +47,7 @@ public class OrderController {
         }
     }
 
+
     // 📌 API lấy danh sách đơn hàng của người dùng
     @GetMapping("/user/{userId}")
     public ResponseEntity<?> getOrdersByUserId(@PathVariable Long userId) {
@@ -105,22 +106,35 @@ public class OrderController {
 
     // 📌 Hàm chuyển đổi Order thành OrderResponseDTO
     private OrderResponseDTO convertToDTO(Order order) {
+        if (order == null) {
+            throw new RuntimeException("Đơn hàng không tồn tại.");
+        }
+
+        if (order.getUser() == null) {
+            throw new RuntimeException("Người dùng của đơn hàng không tồn tại.");
+        }
+
         return new OrderResponseDTO(
                 order.getId(),
                 order.getUser().getUsername(),
                 order.getUser().getEmail(),
-                order.getTotalPrice(),  // ✅ Vẫn giữ tổng tiền
+                order.getTotalPrice(),
                 order.getStatus(),
                 order.getOrderItems().stream()
-                        .map(item -> new OrderItemDTO(
-                                item.getId(),
-                                item.getProduct().getId(),
-                                item.getProduct().getName(),
-                                item.getProduct().getDescription(),
-                                BigDecimal.valueOf(item.getProduct().getPrice()), // ✅ Chỉ giữ giá sản phẩm
-                                item.getProduct().getImageUrl(),
-                                item.getQuantity()
-                        ))
+                        .map(item -> {
+                            if (item.getProduct() == null) {
+                                throw new RuntimeException("Sản phẩm trong đơn hàng bị lỗi.");
+                            }
+                            return new OrderItemDTO(
+                                    item.getId(),
+                                    item.getProduct().getId(),
+                                    item.getProduct().getName(),
+                                    item.getProduct().getDescription(),
+                                    BigDecimal.valueOf(item.getProduct().getPrice()),
+                                    item.getProduct().getImageUrl(),
+                                    item.getQuantity()
+                            );
+                        })
                         .collect(Collectors.toList())
         );
     }

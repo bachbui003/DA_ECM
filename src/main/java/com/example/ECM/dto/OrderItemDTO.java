@@ -8,7 +8,7 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 @NoArgsConstructor
 public class OrderItemDTO {
-    private Long id;
+    private Long orderItemId;
     private Long productId;  // Chỉ lưu ID sản phẩm
     private String productName;
     private String productDescription;
