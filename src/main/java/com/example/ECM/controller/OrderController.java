@@ -1,13 +1,17 @@
 package com.example.ECM.controller;
 
+import com.example.ECM.dto.OrderItemDTO;
+import com.example.ECM.dto.OrderResponseDTO;
 import com.example.ECM.model.Order;
 import com.example.ECM.service.OrderService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/orders")  // Endpoint chính của Order
@@ -22,11 +26,12 @@ public class OrderController {
     }
 
     // 📌 API để đặt hàng từ giỏ hàng
-    @PostMapping("/checkout/{userId}") // Đổi từ @RequestParam sang @PathVariable
-    public ResponseEntity<Order> checkout(@PathVariable Long userId) {
+    @PostMapping("/checkout/{userId}")
+    public ResponseEntity<OrderResponseDTO> checkout(@PathVariable Long userId) {
         Order newOrder = orderService.createOrder(userId);
-        return ResponseEntity.ok(newOrder);
+        return ResponseEntity.ok(convertToDTO(newOrder));
     }
+
 
     // 📌 API lấy đơn hàng theo ID
     @GetMapping("/{id}")
@@ -35,7 +40,7 @@ public class OrderController {
         try {
             Order order = orderService.getOrderById(id);
             logger.info("✅ Đơn hàng tìm thấy: " + order);
-            return ResponseEntity.ok(order);
+            return ResponseEntity.ok(convertToDTO(order));
         } catch (Exception e) {
             logger.log(Level.SEVERE, "❌ Không tìm thấy đơn hàng ID: " + id, e);
             return ResponseEntity.badRequest().body("Lỗi: " + e.getMessage());
@@ -49,7 +54,7 @@ public class OrderController {
         try {
             List<Order> orders = orderService.getOrdersByUserId(userId);
             logger.info("✅ Số đơn hàng tìm thấy: " + orders.size());
-            return ResponseEntity.ok(orders);
+            return ResponseEntity.ok(orders.stream().map(this::convertToDTO).collect(Collectors.toList()));
         } catch (Exception e) {
             logger.log(Level.SEVERE, "❌ Lỗi khi lấy đơn hàng của userId: " + userId, e);
             return ResponseEntity.badRequest().body("Lỗi: " + e.getMessage());
@@ -63,7 +68,7 @@ public class OrderController {
         try {
             List<Order> orders = orderService.getAllOrders();
             logger.info("✅ Tổng số đơn hàng: " + orders.size());
-            return ResponseEntity.ok(orders);
+            return ResponseEntity.ok(orders.stream().map(this::convertToDTO).collect(Collectors.toList()));
         } catch (Exception e) {
             logger.log(Level.SEVERE, "❌ Lỗi khi lấy tất cả đơn hàng", e);
             return ResponseEntity.badRequest().body("Lỗi: " + e.getMessage());
@@ -77,7 +82,7 @@ public class OrderController {
         try {
             Order order = orderService.updateOrder(id, updatedOrder);
             logger.info("✅ Đơn hàng đã cập nhật: " + order);
-            return ResponseEntity.ok(order);
+            return ResponseEntity.ok(convertToDTO(order));
         } catch (Exception e) {
             logger.log(Level.SEVERE, "❌ Lỗi khi cập nhật đơn hàng ID: " + id, e);
             return ResponseEntity.badRequest().body("Lỗi: " + e.getMessage());
@@ -97,4 +102,29 @@ public class OrderController {
             return ResponseEntity.badRequest().body("Lỗi: " + e.getMessage());
         }
     }
+
+    // 📌 Hàm chuyển đổi Order thành OrderResponseDTO
+    private OrderResponseDTO convertToDTO(Order order) {
+        return new OrderResponseDTO(
+                order.getId(),
+                order.getUser().getUsername(),
+                order.getUser().getEmail(),
+                order.getTotalPrice(),  // ✅ Vẫn giữ tổng tiền
+                order.getStatus(),
+                order.getOrderItems().stream()
+                        .map(item -> new OrderItemDTO(
+                                item.getId(),
+                                item.getProduct().getId(),
+                                item.getProduct().getName(),
+                                item.getProduct().getDescription(),
+                                BigDecimal.valueOf(item.getProduct().getPrice()), // ✅ Chỉ giữ giá sản phẩm
+                                item.getProduct().getImageUrl(),
+                                item.getQuantity()
+                        ))
+                        .collect(Collectors.toList())
+        );
+    }
+
+
+
 }

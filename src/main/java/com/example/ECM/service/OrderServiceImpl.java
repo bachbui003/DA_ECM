@@ -1,17 +1,16 @@
 package com.example.ECM.service;
 
-import com.example.ECM.model.Cart;
-import com.example.ECM.model.Order;
-import com.example.ECM.model.User;
+import com.example.ECM.model.*;
 import com.example.ECM.repository.CartRepository;
+import com.example.ECM.repository.OrderItemRepository;
 import com.example.ECM.repository.OrderRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.logging.Logger;
 
 @Service
@@ -22,17 +21,20 @@ public class OrderServiceImpl implements OrderService {
 
     private final OrderRepository orderRepository;
     private final CartRepository cartRepository;
+    private final OrderItemRepository orderItemRepository;
 
     @Autowired
-    public OrderServiceImpl(OrderRepository orderRepository, CartRepository cartRepository) {
+    public OrderServiceImpl(OrderRepository orderRepository, CartRepository cartRepository, OrderItemRepository orderItemRepository) {
         this.orderRepository = orderRepository;
         this.cartRepository = cartRepository;
+        this.orderItemRepository = orderItemRepository;
     }
 
     @Override
     public Order createOrder(Long userId) {
         logger.info("Bắt đầu tạo đơn hàng cho userId: " + userId);
 
+        // Tìm giỏ hàng của user
         Cart cart = cartRepository.findByUserId(userId)
                 .orElseThrow(() -> {
                     logger.severe("Không tìm thấy giỏ hàng cho userId: " + userId);
@@ -47,31 +49,33 @@ public class OrderServiceImpl implements OrderService {
             throw new RuntimeException("Giỏ hàng trống, không thể đặt hàng!");
         }
 
+        // Tạo đơn hàng mới
         Order newOrder = new Order();
         newOrder.setUser(cart.getUser());
+        newOrder.setStatus("PENDING");
 
-        // Kiểm tra xem cart.getUser() có null không
-        if (cart.getUser() == null) {
-            logger.severe("Lỗi: User trong giỏ hàng là null!");
-            throw new RuntimeException("Không thể tạo đơn hàng vì thiếu thông tin người dùng.");
+        // Tạo danh sách OrderItem từ giỏ hàng
+        List<OrderItem> orderItems = new ArrayList<>();
+        BigDecimal totalPrice = BigDecimal.ZERO;
+
+        for (CartItem cartItem : cart.getCartItems()) {
+            OrderItem orderItem = new OrderItem();
+            orderItem.setOrder(newOrder);
+            orderItem.setProduct(cartItem.getProduct());
+            orderItem.setQuantity(cartItem.getQuantity());
+            orderItem.setPrice(BigDecimal.valueOf(cartItem.getProduct().getPrice()).multiply(BigDecimal.valueOf(cartItem.getQuantity())));
+
+            orderItems.add(orderItem);
+            totalPrice = totalPrice.add(orderItem.getPrice());
         }
 
-        double totalPrice = cart.getCartItems().stream()
-                .mapToDouble(item -> {
-                    if (item.getProduct() == null) {
-                        logger.severe("Sản phẩm trong giỏ hàng bị null!");
-                        throw new RuntimeException("Sản phẩm trong giỏ hàng không hợp lệ.");
-                    }
-                    return item.getQuantity() * item.getProduct().getPrice();
-                })
-                .sum();
-
-        newOrder.setTotalPrice(BigDecimal.valueOf(totalPrice));
-        newOrder.setStatus("PENDING");
+        newOrder.setTotalPrice(totalPrice);
+        newOrder.setOrderItems(orderItems);
 
         logger.info("Tổng giá trị đơn hàng: " + totalPrice);
         logger.info("Lưu đơn hàng vào cơ sở dữ liệu...");
 
+        // Lưu đơn hàng (Hibernate sẽ tự động lưu OrderItem nhờ cascade = CascadeType.ALL)
         Order savedOrder = orderRepository.save(newOrder);
 
         logger.info("Đơn hàng đã được tạo thành công: " + savedOrder);
@@ -84,16 +88,22 @@ public class OrderServiceImpl implements OrderService {
         return savedOrder;
     }
 
+
     @Override
     public Order getOrderById(Long id) {
         logger.info("Tìm đơn hàng với ID: " + id);
-        return orderRepository.findById(id)
+        Order order = orderRepository.findById(id)
                 .orElseThrow(() -> {
                     logger.severe("Không tìm thấy đơn hàng với ID: " + id);
                     return new RuntimeException("Order not found");
                 });
-    }
 
+        // Load danh sách sản phẩm trong đơn hàng
+        List<OrderItem> orderItems = orderItemRepository.findByOrderId(id);
+        order.setOrderItems(orderItems); // Đảm bảo danh sách sản phẩm được đưa vào đơn hàng
+
+        return order;
+    }
     @Override
     public List<Order> getOrdersByUserId(Long userId) {
         logger.info("Lấy danh sách đơn hàng của userId: " + userId);
@@ -140,4 +150,5 @@ public class OrderServiceImpl implements OrderService {
         orderRepository.deleteById(id);
         logger.info("Đã xóa đơn hàng với ID: " + id);
     }
+
 }
